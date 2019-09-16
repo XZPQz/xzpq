@@ -39,23 +39,23 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
-
+    QString currentName;
+    //该部分由其他组员编写，但是我需要调用这部分函数
+    bool maybeSave();
+    void setCurrentFile(const QString &);
+    bool saveFile(const QString &);
+    void loadFile(const QString &);
 private:
     QString filename;
     QString savefilename;
     QProcess *process;
 private slots:
-     void on_copy();
-     void on_paste();
-     void on_cut();
-     void on_selectall();
-     void on_redo();
-     void on_undo();
-     void on_delete();
-
-     void on_character();
-
+     void on_exit();
+     void on_open();
+     bool on_save();
+     bool on_saveas();
+     void on_new();
+private:
     Ui::MainWindow *ui;
-    QLineEdit *find_textLineEdit;
 };
 #endif //MAINWINDOW_H

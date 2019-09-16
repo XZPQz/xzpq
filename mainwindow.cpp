@@ -2,6 +2,7 @@
 #include "ui_mainwindow.h"
 #include "QMessageBox"
 #include "QFileDialog"
+#include "highlighter.h"
 #include "QProcess"
 #include <QApplication>
 #include <qclipboard.h>
@@ -19,72 +20,157 @@
 #include <QDebug>
 #include <QDataStream>
 #include <QProcess>
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    Highlighter * h = new Highlighter(ui->plainTextEdit->document());
-    searchLineEdit=new QLineEdit();
-    replaceLineEdit=new QLineEdit();
-    searchInputLineEdit=new QLineEdit();
-
-   connect(ui->actionfuzhi,SIGNAL(triggered()),this,SLOT(on_copy()));
-   connect(ui->actionjianqie,SIGNAL(triggered()),this,SLOT(on_cut()));
-   connect(ui->actionzhantie,SIGNAL(triggered()),this,SLOT(on_paste()));
-   connect(ui->actionquanxuan,SIGNAL(triggered()),this,SLOT(on_selectall()));
-   connect(ui->actionchexiao,SIGNAL(triggered()),this,SLOT(on_undo()));
-   connect(ui->actionhuifu,SIGNAL(triggered()),this,SLOT(on_redo()));
-   connect(ui->actionshanchu,SIGNAL(triggered()),this,SLOT(on_delete()));
-   connect(ui->actionziti,SIGNAL(triggered()),this,SLOT(on_character()));
+    //Qt的消息槽机制
+    //函数连接至前端
+   connect(ui->actiondakai,SIGNAL(triggered()),this,SLOT(on_open()));
+   connect(ui->actiontuichu,SIGNAL(triggered()),this,SLOT(on_exit()));
+   connect(ui->actionbaocun,SIGNAL(triggered()),this,SLOT(on_save()));
+   connect(ui->actionxinjian,SIGNAL(triggered()),this,SLOT(on_new()));
+   connect(ui->actionlingcunwei,SIGNAL(triggered()),this,SLOT(on_saveas()));
 }
 MainWindow::~MainWindow()
 {
     delete ui;
 }
-void MainWindow::on_copy()
+void MainWindow::on_exit()
 {
-    ui->plainTextEdit->copy();
+    exit(0);
 }
-void MainWindow::on_paste()
+//弹出判断框
+bool MainWindow::maybeSave()
 {
-    ui->plainTextEdit->paste();
-}
-
-void MainWindow::on_cut()
-{
-   ui->plainTextEdit->cut();
-}
-void MainWindow::on_selectall()
-{
-    ui->plainTextEdit->selectAll();
-}
-void MainWindow::on_redo()
-{
-    ui->plainTextEdit->redo();
-}
-void MainWindow::on_undo()
-{
-    ui->plainTextEdit->undo();
-}
-void MainWindow::on_delete()
-{
-   on_selectall();
-   on_cut();
-}
-
-void MainWindow::on_character()
-{
-    bool ok;
-    //设置默认字体为 Helvetica [Cronyx], 10
-    QFont font = QFontDialog::getFont(&ok, QFont("Helvetica [Cronyx]", 10), this);
-    if (ok)
+    if(ui->plainTextEdit->document()->isModified())
     {
-        ui->plainTextEdit->setFont(font);
-        //用户点击ok完成修改
+        QMessageBox *messagebox = new QMessageBox(this);
+        messagebox->setIcon(QMessageBox::Warning);
+        messagebox->setWindowTitle("提示");
+        messagebox->setText("是否保存当前文件？");
+        messagebox->addButton("取消",QMessageBox::RejectRole);
+        messagebox->addButton("确定",QMessageBox::AcceptRole);
+        if(messagebox->exec()==QDialog::Accepted)
+        {
+            return on_save();
+        }
+        else if(messagebox->exec()==QDialog::Rejected)
+        {
+            return true;
+        }
     }
     else
     {
-        //用户点击cancel则恢复为默认字体 Helvetica [Cronyx], 10
+        return true;
+    }
+}
+
+void MainWindow::on_new()
+{
+    if(ui->plainTextEdit->document()->isModified())
+    {
+        //如果文本改动
+        QMessageBox *messagebox = new QMessageBox(this);
+        messagebox->setIcon(QMessageBox::Warning);
+        messagebox->setWindowTitle("提示");
+        messagebox->setText("是否保存当前文件？");
+        messagebox->addButton("取消",QMessageBox::RejectRole);
+        messagebox->addButton("确定",QMessageBox::AcceptRole);
+        if(messagebox->exec()==QDialog::Accepted)
+        {
+            on_save();
+            ui->plainTextEdit->clear();
+            setCurrentFile("");
+        }
+        else if(messagebox->exec()==QDialog::Rejected)
+        {
+            ui->plainTextEdit->clear();
+            setCurrentFile("");
+        }
+    }
+
+    else if(ui->plainTextEdit->toPlainText()!="")
+    {
+        QMessageBox *messagebox = new QMessageBox(this);
+        messagebox->setIcon(QMessageBox::Warning);
+        messagebox->setWindowTitle("提示");
+        messagebox->setText("是否保存当前文件？");
+        messagebox->addButton("取消",QMessageBox::RejectRole);
+        messagebox->addButton("确定",QMessageBox::AcceptRole);
+
+        if(messagebox->exec()==QDialog::Accepted)
+        {
+            on_save();
+            ui->plainTextEdit->clear();
+            setCurrentFile("");
+        }
+        else if(messagebox->exec()==QDialog::Rejected)
+        {
+            ui->plainTextEdit->clear();
+            setCurrentFile("");
+        }
+    }
+}
+
+bool MainWindow::on_save()
+{
+    if(currentName.isEmpty())
+        return on_saveas();
+    else
+        return saveFile(currentName);
+}
+
+bool MainWindow::saveFile(const QString &fileName)
+{
+    QFile file(fileName);
+    QMessageBox * messagebox = new QMessageBox(this);
+
+    if(!file.open(QFile::WriteOnly|QFile::Text))
+    {
+       // QDebug("YES");
+        messagebox->setIcon(QMessageBox::Critical);
+        messagebox->setWindowTitle("提示");
+        messagebox->setText("不能写入该文件");
+        messagebox->show();
+        return false;
+    }
+    else
+    {
+        QTextStream out(&file);
+        out<<ui->plainTextEdit->toPlainText();
+        setCurrentFile(fileName);
+        return true;
+    }
+}
+
+bool MainWindow::on_saveas()
+{
+    QString fileName =QFileDialog::getSaveFileName(this);
+    if(fileName.isEmpty())
+        return false;
+    else
+    {
+        if(fileName.endsWith(".c"))
+        {
+            return saveFile(fileName);
+        }
+        else
+        {
+            QString cname = fileName+".c";
+            return saveFile(cname);
+        }
+    }
+}
+
+void MainWindow::on_open()
+{
+    if(maybeSave())
+    {
+        QString fileName = QFileDialog::getOpenFileName(this);
+        if(!fileName.isEmpty())
+            loadFile(fileName);
     }
 }
